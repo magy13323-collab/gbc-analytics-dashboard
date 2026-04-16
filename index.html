@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orders Dashboard</title>
+    <style>
+      :root {
+        --bg: #f6f7fb;
+        --text: #1c2230;
+        --muted: #5f6b84;
+        --card: #ffffff;
+        --bar: #2f80ed;
+        --border: #d9deea;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top right, #e9f0ff 0%, var(--bg) 45%);
+      }
+
+      .wrap {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(21, 36, 75, 0.06);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .stats {
+        margin-top: 16px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .stat {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #f8faff;
+        min-width: 160px;
+      }
+
+      .stat .label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .stat .value {
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      #status {
+        margin-top: 14px;
+        min-height: 20px;
+        color: var(--muted);
+      }
+
+      .chart {
+        margin-top: 16px;
+        height: 340px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 10px 6px;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(22px, 1fr);
+        gap: 8px;
+        align-items: end;
+        overflow-x: auto;
+      }
+
+      .bar-col {
+        min-width: 22px;
+        height: 100%;
+        display: grid;
+        grid-template-rows: 20px 1fr 22px;
+        align-items: end;
+      }
+
+      .bar-value {
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .bar-wrap {
+        height: 100%;
+        display: flex;
+        align-items: end;
+      }
+
+      .bar {
+        width: 100%;
+        border-radius: 6px 6px 0 0;
+        background: linear-gradient(180deg, #4f98f3 0%, var(--bar) 100%);
+      }
+
+      .bar-date {
+        margin-top: 6px;
+        text-align: center;
+        font-size: 10px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>Orders Dashboard</h1>
+        <p class="subtitle">Data source: Supabase (`orders.created_at`), grouped by creation minute</p>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Total orders</div>
+            <div id="total-orders" class="value">-</div>
+          </div>
+          <div class="stat">
+            <div class="label">Days in chart</div>
+            <div id="total-days" class="value">-</div>
+          </div>
+        </div>
+
+        <p id="status">Loading data...</p>
+        <div id="chart" class="chart" aria-label="Orders chart"></div>
+      </section>
+    </main>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const chartEl = document.getElementById("chart");
+      const totalOrdersEl = document.getElementById("total-orders");
+      const totalDaysEl = document.getElementById("total-days");
+
+      function formatDate(value) {
+        if (!value) {
+          return "";
+        }
+
+        const timePart = value.includes("T") ? value.split("T")[1] : value;
+        return timePart.slice(0, 5);
+      }
+
+      function renderChart(points) {
+        chartEl.innerHTML = "";
+
+        if (!points.length) {
+          statusEl.textContent = "No data for chart.";
+          return;
+        }
+
+        const maxCount = Math.max(...points.map((point) => point.count), 1);
+        const showLabelEvery = Math.max(1, Math.ceil(points.length / 12));
+
+        points.forEach((point, index) => {
+          const column = document.createElement("div");
+          column.className = "bar-col";
+
+          const value = document.createElement("div");
+          value.className = "bar-value";
+          value.textContent = point.count;
+
+          const barWrap = document.createElement("div");
+          barWrap.className = "bar-wrap";
+
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.height = `${Math.round((point.count / maxCount) * 100)}%`;
+          bar.title = `${point.date}: ${point.count}`;
+
+          const date = document.createElement("div");
+          date.className = "bar-date";
+          date.textContent =
+            index % showLabelEvery === 0 || index === points.length - 1
+              ? formatDate(point.date)
+              : "";
+
+          barWrap.appendChild(bar);
+          column.appendChild(value);
+          column.appendChild(barWrap);
+          column.appendChild(date);
+          chartEl.appendChild(column);
+        });
+      }
+
+      async function loadData() {
+        try {
+          const response = await fetch("/api/orders-by-day");
+          const payload = await response.json();
+
+          if (!response.ok) {
+            throw new Error(payload.details || "Unknown error");
+          }
+
+          totalOrdersEl.textContent = payload.totalOrders;
+          totalDaysEl.textContent = payload.points.length;
+          renderChart(payload.points);
+          statusEl.textContent = "Data loaded successfully.";
+        } catch (error) {
+          statusEl.textContent = `Load error: ${error.message}`;
+        }
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>
