@@ -30,14 +30,14 @@ headers_supabase = {
     "apikey": supabase_key,
     "Authorization": f"Bearer {supabase_key}",
     "Content-Type": "application/json",
-    "Prefer": "resolution=merge duplicates",
+    "Prefer": "resolution=merge-duplicates",
 }
 
 page = 1
 limit = 100
 processed_total = 0
 uploaded_total = 0
-batch_size = 10
+batch_size = 1
 
 while True:
     resp = requests.get(
